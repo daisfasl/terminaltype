@@ -1,0 +1,6 @@
+# Regenerated from src/db/seed/**/*.json at build time (see
+# scripts/build-content-db.ts) - not a tracked file.
+src/db/content.db
+
+# bun build --compile incremental cache artifacts
+*.bun-build

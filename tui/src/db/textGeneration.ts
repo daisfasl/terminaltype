@@ -1,15 +1,24 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+// Bun-specific "sqlite" import attribute: embeds the database into a
+// compiled binary and hands back an already-open Database instance (unlike
+// `type: "file"`, which only yields a path - one that lives in bunfs, a
+// virtual filesystem bun:sqlite's native binding can't open, see
+// https://github.com/oven-sh/bun/issues/15766). Works the same way under
+// plain `bun run` in dev. See ROADMAP Phase G, Part B - this is what lets
+// content survive being bundled into a single binary, unlike the
+// readFileSync/readdirSync-off-`seed/` approach this file used to use.
+//
+// Word/quote content lives as one JSON blob per language/quote-file, one row
+// per file, mirroring monkeytypegame/monkeytype's own per-language layout
+// (see ROADMAP Phase D/attribution in README) - not consolidated into a
+// single JSON blob, since there's no longer a single "the" word list.
+// Deliberately separate from the writable stats DB in db/index.ts - this one
+// is a regenerated build artifact (see scripts/build-content-db.ts), that
+// one holds durable user data.
+import contentDb from "./content.db" with { type: "sqlite", embed: "true" };
 
-// Word/quote content lives as one JSON file per language, mirroring
-// monkeytypegame/monkeytype's own layout (see ROADMAP Phase D/attribution in
-// README) - not consolidated into a single file, since there's no longer a
-// single "the" word list. Loaded from disk on demand and cached in-memory;
-// nothing is read from SQLite anymore.
-const SEED_DIR = join(dirname(fileURLToPath(import.meta.url)), "seed");
-const LANGUAGES_DIR = join(SEED_DIR, "languages");
-const QUOTES_DIR = join(SEED_DIR, "quotes");
+function getContentDb() {
+  return contentDb;
+}
 
 export const DEFAULT_LANGUAGE = "english";
 
@@ -60,11 +69,13 @@ function loadWordList(language: string): string[] {
   const cached = wordListCache.get(language);
   if (cached) return cached;
 
-  const path = join(LANGUAGES_DIR, `${language}.json`);
-  if (!existsSync(path)) {
+  const row = getContentDb()
+    .query("SELECT data FROM languages WHERE name = ?")
+    .get(language) as { data: string } | null;
+  if (!row) {
     throw new Error(`Unknown language: ${language}`);
   }
-  const data = JSON.parse(readFileSync(path, "utf-8")) as LanguageFile;
+  const data = JSON.parse(row.data) as LanguageFile;
   wordListCache.set(language, data.words);
   return data.words;
 }
@@ -73,12 +84,14 @@ function loadQuoteFile(language: string): QuoteFile | null {
   const cached = quoteFileCache.get(language);
   if (cached !== undefined) return cached;
 
-  const path = join(QUOTES_DIR, `${language}.json`);
-  if (!existsSync(path)) {
+  const row = getContentDb()
+    .query("SELECT data FROM quotes WHERE name = ?")
+    .get(language) as { data: string } | null;
+  if (!row) {
     quoteFileCache.set(language, null);
     return null;
   }
-  const data = JSON.parse(readFileSync(path, "utf-8")) as QuoteFile;
+  const data = JSON.parse(row.data) as QuoteFile;
   quoteFileCache.set(language, data);
   return data;
 }
@@ -129,10 +142,10 @@ function randomWords(count: number, language: string): string[] {
 // Available language codes, derived from the bundled seed files - drives the
 // Settings "Word list" cycler and (for multiplayer) the Lobby's language row.
 export function getAvailableLanguages(): string[] {
-  return readdirSync(LANGUAGES_DIR)
-    .filter((file) => file.endsWith(".json"))
-    .map((file) => file.slice(0, -".json".length))
-    .sort();
+  return getContentDb()
+    .query("SELECT name FROM languages ORDER BY name")
+    .all()
+    .map((row) => (row as { name: string }).name);
 }
 
 export function generateText(
