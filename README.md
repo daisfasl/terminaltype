@@ -27,7 +27,12 @@ A terminal typing game, typeracer-style: solo practice plus multiplayer
 
 ## Getting started
 
-Requires [Bun](https://bun.sh).
+```
+brew install daisfasl/terminaltype/terminaltype
+terminaltype
+```
+
+Or run from source (requires [Bun](https://bun.sh)):
 
 ```
 cd tui
@@ -43,8 +48,6 @@ development).
 Alternatively, run the backend + a local Caddy reverse proxy together via
 `docker compose up` from the repo root (see `Caddyfile`/`docker-compose.yml`;
 defaults to serving `localhost` with no real domain needed).
-
-A `brew install` release isn't published yet — coming later.
 
 ## License
 
