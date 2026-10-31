@@ -28,3 +28,6 @@ dist-ssr
 *.sln
 *.sw?
 
+
+# pytest-cov
+.coverage
